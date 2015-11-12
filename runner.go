@@ -1,15 +1,10 @@
 package gsrunner
 
 import (
-	"bufio"
 	"errors"
 	"flag"
-	"io"
-	"math"
 	"os"
 	"path/filepath"
-	"regexp"
-	"strconv"
 
 	"github.com/gsdocker/gsconfig"
 	"github.com/gsdocker/gserrors"
@@ -21,7 +16,7 @@ import (
 var (
 	ErrFlag     = errors.New("flag error")
 	ErrConfig   = errors.New("config load error")
-	ErrRegistry = errors.New("registry file error")
+	ErrRegistry = errors.New("load registry file error")
 )
 
 // Runner gsdocker services runner
@@ -232,7 +227,7 @@ func (runner *_Runner) Run(main func(runner Runner)) {
 			gserrors.Panicf(err, "open registry file error :%s", registryFile)
 		}
 
-		runner.loadRegistry(file, registryFile)
+		gorpc.RegistryLoad(file, registryFile)
 
 		runner.I("load gsrpc services registry file :%s -- success", registryFile)
 	}
@@ -240,50 +235,4 @@ func (runner *_Runner) Run(main func(runner Runner)) {
 	runner.I("service started.")
 
 	main(runner)
-}
-
-var registryRegex = regexp.MustCompile(`^(?P<name>[A-Za-z0-9_](\.[A-Za-z0-9_])+)=(?P<id>[0-9]+)$`)
-
-func (runner *_Runner) loadRegistry(file io.Reader, path string) {
-
-	reader := bufio.NewReader(file)
-
-	lines := 0
-
-	items := make(map[string]uint16)
-
-	for {
-		line, err := reader.ReadString('\n')
-
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-
-			gserrors.Panicf(err, "read registry file error :%s", path)
-		}
-
-		tokens := registryRegex.FindStringSubmatch(line)
-
-		if tokens == nil {
-			gserrors.Panicf(ErrRegistry, "load registry file error:\n\tinvalid format\n\t%s(%d)", path, lines)
-		}
-
-		val, err := strconv.ParseInt(tokens[1], 0, 32)
-
-		if err != nil {
-			gserrors.Panicf(err, "load registry file error:\n\tinvalid format\n\t%s(%d)", path, lines)
-		}
-
-		if val > math.MaxUint16 {
-			gserrors.Panicf(ErrRegistry, "load registry file error:\n\tid out of range\n\t%s(%d)", path, lines)
-		}
-
-		items[tokens[0]] = uint16(val)
-
-		lines++
-
-	}
-
-	gorpc.RegistryUpdate(items)
 }
